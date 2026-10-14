@@ -16,14 +16,33 @@ logger = logging.getLogger(__name__)
 _TELEGRAM_API_HOST = "api.telegram.org"
 
 
+_ERROR_CHAIN_LIMIT = 6
+
+
+def _error_chain(error: BaseException) -> list[BaseException]:
+    """``error`` plus its ``__cause__``/``__context__`` chain (bounded, cycle-safe, honours ``from None``)."""
+    chain: list[BaseException] = []
+    current: BaseException | None = error
+    while current is not None and len(chain) < _ERROR_CHAIN_LIMIT and all(current is not e for e in chain):
+        chain.append(current)
+        current = current.__cause__ or (None if current.__suppress_context__ else current.__context__)
+    return chain
+
+
 def _describe_transport_error(error: Exception) -> str:
-    """Return a non-empty, secret-safe exception representation for diagnostics."""
+    """Return a non-empty, secret-safe exception representation for diagnostics, including the cause chain.
+
+    httpx re-raises httpcore errors with ``str(cause)`` as the message, so a TLS handshake the peer cut
+    surfaces as ``ConnectError('')``; only the chain tells a FIN (anyio ``EndOfStream``) from a reset
+    (anyio ``BrokenResourceError``) or a TLS alert (``ssl.SSLError``).
+    """
+    chain = _error_chain(error)
     try:
         from agent.redact import redact_sensitive_text
 
-        return redact_sensitive_text(repr(error), force=True)
+        return redact_sensitive_text(" <- ".join(repr(e) for e in chain), force=True)
     except Exception:
-        return type(error).__name__
+        return " <- ".join(type(e).__name__ for e in chain)
 
 # TCP keepalive so a half-open/CLOSE-WAIT long-poll errors out instead of blocking getUpdates forever
 # (Windows leaves SO_KEEPALIVE off). Idle/interval knobs are best-effort per Python/OS combo.

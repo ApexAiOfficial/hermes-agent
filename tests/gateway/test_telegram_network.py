@@ -74,6 +74,40 @@ def _telegram_request(path="/botTOKEN/getMe"):
     return httpx.Request("GET", f"https://api.telegram.org{path}")
 
 
+def _raised(exc, cause):
+    try:
+        raise exc from cause
+    except BaseException as caught:
+        return caught
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Failure descriptions in the transport's log lines
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestDescribeTransportError:
+    """httpx flattens a peer-cut TLS handshake to ``ConnectError('')``; the log must still say why."""
+
+    def test_names_the_underlying_cause(self):
+        import anyio
+        import httpcore
+
+        fin = _raised(httpx.ConnectError(""), _raised(httpcore.ConnectError(anyio.EndOfStream()), anyio.EndOfStream()))
+        rst = _raised(httpx.ConnectError(""), _raised(anyio.BrokenResourceError(),
+                                                      ConnectionResetError(104, "Connection reset by peer")))
+        fin_text, rst_text = tnet._describe_transport_error(fin), tnet._describe_transport_error(rst)
+        assert "EndOfStream" in fin_text and "ConnectionResetError" in rst_text
+        assert fin_text != rst_text
+
+    def test_chain_stays_redacted_and_terminates_on_cycles(self):
+        inner = RuntimeError("GET https://api.telegram.org/bot1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/getMe")
+        outer = _raised(httpx.ConnectError(""), inner)
+        inner.__context__ = outer
+        text = tnet._describe_transport_error(outer)
+        assert "RuntimeError" in text
+        assert "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" not in text
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # IP parsing & validation
 # ═══════════════════════════════════════════════════════════════════════════
