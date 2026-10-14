@@ -99,13 +99,15 @@ class TestDescribeTransportError:
         assert "EndOfStream" in fin_text and "ConnectionResetError" in rst_text
         assert fin_text != rst_text
 
-    def test_chain_stays_redacted_and_terminates_on_cycles(self):
-        inner = RuntimeError("GET https://api.telegram.org/bot1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/getMe")
+    def test_chain_stays_redacted_bounded_and_terminates_on_cycles(self):
+        inner = RuntimeError("GET https://api.telegram.org/bot1234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/getMe "
+                             "via http://alice:s3cretPassw0rd@10.0.0.9:3128 " + "x" * 5000)
         outer = _raised(httpx.ConnectError(""), inner)
         inner.__context__ = outer
         text = tnet._describe_transport_error(outer)
         assert "RuntimeError" in text
-        assert "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" not in text
+        assert "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" not in text and "s3cretPassw0rd" not in text
+        assert len(text) < 2000  # bounded however large the underlying messages are
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -17,6 +17,7 @@ _TELEGRAM_API_HOST = "api.telegram.org"
 
 
 _ERROR_CHAIN_LIMIT = 6
+_ERROR_DESCRIPTION_LIMIT = 1000  # chars of the redacted description; truncated only after redaction
 
 
 def _error_chain(error: BaseException) -> list[BaseException]:
@@ -40,7 +41,9 @@ def _describe_transport_error(error: Exception) -> str:
     try:
         from agent.redact import redact_sensitive_text
 
-        return redact_sensitive_text(" <- ".join(repr(e) for e in chain), force=True)
+        # Log-only text: no round-trip URLs to preserve, so mask proxy ``user:pass@`` userinfo too.
+        text = redact_sensitive_text(" <- ".join(repr(e) for e in chain), force=True, redact_url_credentials=True)
+        return text[:_ERROR_DESCRIPTION_LIMIT]
     except Exception:
         return " <- ".join(type(e).__name__ for e in chain)
 
