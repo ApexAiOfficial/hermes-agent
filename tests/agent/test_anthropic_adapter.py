@@ -28,6 +28,9 @@ class TestIsOAuthToken:
     def test_api_key(self):
         assert _is_oauth_token("sk-ant-api03-abcdef1234567890") is False
 
+    def test_user_scoped_console_key(self):
+        assert _is_oauth_token("sk-ant-" + "usr-x") is False  # split: never a key-shaped literal
+
 
 class TestBuildAnthropicClient:
 

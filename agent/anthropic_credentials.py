@@ -61,8 +61,10 @@ def _first_env(*names: str) -> str:
 
 
 def _is_oauth_token(key: str) -> bool:
-    """True for Anthropic OAuth/setup tokens (sk-ant-*, eyJ JWTs, cc-); False for sk-ant-api* Console keys."""
-    if not key or key.startswith("sk-ant-api"):
+    """True for Anthropic OAuth/setup tokens (sk-ant-*, eyJ JWTs, cc-); False for Console API keys:
+    ``sk-ant-api*`` and the user-scoped ``sk-ant-usr*`` keys the Console issues since late 2026 (sent as an
+    OAuth Bearer, a Console key is refused with "Your credit balance is too low")."""
+    if not key or key.startswith(("sk-ant-api", "sk-ant-usr")):
         return False
     return key.startswith(("sk-ant-", "eyJ", "cc-"))
 
